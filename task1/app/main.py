@@ -2,7 +2,47 @@ import mysql.connector
 from mysql.connector import errorcode
 from flask import Flask, request, jsonify, render_template_string
 import threading
-from .database import get_connection, init_db
+#from database import get_connection, init_db
+
+DB_CONFIG = {
+    "host": "127.0.0.1",
+    "port":3306,
+    "user": "root",
+    "password": "admin",
+    "database": "python_db"
+}
+
+
+def get_connection():
+    """Establish and return a connection to the MySQL database."""
+    try:
+        connection = mysql.connector.connect(**DB_CONFIG)
+        return connection
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+        return None
+
+def init_db():
+    """Create tables in the database (handled manually in MySQL directly, no ORM)."""
+    connection = get_connection()
+    if connection:
+        cursor = connection.cursor()
+        try:
+            # Example query to create the users table
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mysqli_users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                email VARCHAR(100) NOT NULL UNIQUE
+            );
+            """)
+            print("Table created successfully (if not already exists).")
+        except mysql.connector.Error as err:
+            print(f"Failed to create table: {err}")
+        finally:
+            cursor.close()
+            connection.close()
+
 
 def create_user(db, name: str, email: str):
     """Create a new user"""
