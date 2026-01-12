@@ -10,69 +10,110 @@ DB_CONFIG = {
     "user": "root",
     "password": "admin",
     "database": "python_db"
-}
+    }
 
+def get_db_connection():
+    return mysql.connector.connect(**DB_CONFIG)
 
-def get_connection():
-    """Establish and return a connection to the MySQL database."""
+def setup_logging_and_triggers():
+    setup_statements = [
+        # Create logs table if not exists
+        """
+        CREATE TABLE IF NOT EXISTS mysqli_logs (
+            log_id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            action_type ENUM('INSERT', 'UPDATE', 'DELETE'),
+            action_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """,
+        # Trigger: after insert
+        """
+        CREATE TRIGGER IF NOT EXISTS after_user_insert
+        AFTER INSERT ON mysqli_users
+        FOR EACH ROW
+        BEGIN
+            INSERT INTO mysqli_logs (user_id, action_type)
+            VALUES (NEW.id, 'INSERT');
+        END;
+        """,
+        # Trigger: after update
+        """
+        CREATE TRIGGER IF NOT EXISTS after_user_update
+        AFTER UPDATE ON mysqli_users
+        FOR EACH ROW
+        BEGIN
+            INSERT INTO mysqli_logs (user_id, action_type)
+            VALUES (NEW.id, 'UPDATE');
+        END;
+        """,
+        # Trigger: after delete
+        """
+        CREATE TRIGGER IF NOT EXISTS after_user_delete
+        AFTER DELETE ON mysqli_users
+        FOR EACH ROW
+        BEGIN
+            INSERT INTO mysqli_logs (user_id, action_type)
+            VALUES (OLD.id, 'DELETE');
+        END;
+        """,
+    ]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        connection = mysql.connector.connect(**DB_CONFIG)
-        return connection
+        for stmt in setup_statements:
+            for result in cursor.execute(stmt, multi=True):
+                pass  # execute all parts
+        conn.commit()
+        print("Logging table and triggers set up successfully.")
     except mysql.connector.Error as err:
-        print(f"Error: {err}")
-        return None
-
-def init_db():
-    """Create tables in the database (handled manually in MySQL directly, no ORM)."""
-    connection = get_connection()
-    if connection:
-        cursor = connection.cursor()
-        try:
-            # Example query to create the users table
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS mysqli_users (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(100) NOT NULL,
-                email VARCHAR(100) NOT NULL UNIQUE
-            );
-            """)
-            print("Table created successfully (if not already exists).")
-        except mysql.connector.Error as err:
-            print(f"Failed to create table: {err}")
-        finally:
-            cursor.close()
-            connection.close()
-
-
-def create_user(db, name: str, email: str):
-    """Create a new user"""
-    try:
-        cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO mysqli_users (name, email) VALUES (%s, %s)", (name, email)
-        )
-        db.commit()  # Commit the transaction
-        # Get the ID of the last inserted user
-        user_id = cursor.lastrowid
+        print(f"Error during setup: {err}")
+    finally:
         cursor.close()
-        
-        # Return user details (simulated as a dictionary)
-        return {"id": user_id, "name": name, "email": email}
-    except mysql.connector.Error as err:
-        print(f"Error creating user: {err}")
-        return None
+        conn.close()
 
-def get_user(db, user_id: int):
-    """Get user by ID"""
+def ensure_users_table():
+    create_users = """
+    CREATE TABLE IF NOT EXISTS mysqli_users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100),
+        email VARCHAR(100) UNIQUE
+    );
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        cursor = db.cursor(dictionary=True)  # Using dictionary to return data as a dictionary
-        cursor.execute("SELECT id, name, email FROM mysqli_users WHERE id = %s", (user_id,))
-        user = cursor.fetchone()
-        cursor.close()
-        return user
+        cursor.execute(create_users)
+        conn.commit()
+        print("mysqli_users table ensured.")
     except mysql.connector.Error as err:
-        print(f"Error retrieving user: {err}")
-        return None
+        print(f"Error ensuring users table: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+
+def add_email_index():
+    idx_stmt = "CREATE INDEX IF NOT EXISTS idx_email ON mysqli_users(email);"
+    # Note: MySQL doesn't support IF NOT EXISTS for CREATE INDEX in older versions.
+    # Fallback: try to create and ignore error if exists.
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("CREATE INDEX idx_email ON mysqli_users(email);")
+        conn.commit()
+        print("Index idx_email created on mysqli_users(email).")
+    except mysql.connector.Error as err:
+        if err.errno == errorcode.ER_DUP_KEYNAME:
+            print("Index idx_email already exists.")
+        else:
+            print(f"Error creating index: {err}")
+    finally:
+        cursor.close()
+        conn.close()
+
+
+
+
 
 app = Flask(__name__)
 
@@ -127,29 +168,15 @@ def delete_user(user_id):
         cursor.close()
         conn.close()
 
-def main():
-    """Main function to run the app"""
-    # Initialize DB (create tables)
-    init_db()
+def run_app():
+    # Ensure base tables exist before starting the server
+    ensure_users_table()
+    # Optional: create logging and triggers if not present
+    setup_logging_and_triggers()
+    # Optional: add index for performance
+    add_email_index()
+    app.run(host='0.0.0.0', port=5000, debug=True)
 
-    # Open a connection to interact with the database
-    db = get_connection()
-    if db is None:
-        print("Failed to connect to the database.")
-        return
-
-    # Create a new user
-    new_user = create_user(db, name="John Doe", email="johndoe@example.com")
-    if new_user:
-        print(f"User created: {new_user['name']} ({new_user['email']})")
-
-    # Get the user back
-    user = get_user(db, new_user['id'])
-    if user:
-        print(f"Retrieved user: {user['name']} ({user['email']})")
-
-    # Close the connection
-    db.close()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    # Run in a separate thread if you want to invoke setup without blocking
+    run_app()
