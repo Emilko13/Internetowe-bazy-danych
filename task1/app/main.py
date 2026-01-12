@@ -74,6 +74,59 @@ def get_user(db, user_id: int):
         print(f"Error retrieving user: {err}")
         return None
 
+app = Flask(__name__)
+
+@app.route('/users', methods=['GET'])
+def get_users():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, name, email FROM mysqli_users;")
+        rows = cursor.fetchall()
+        return jsonify(rows)
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/users', methods=['POST'])
+def create_user():
+    data = request.get_json()
+    name = data.get('name')
+    email = data.get('email')
+    if not name or not email:
+        return jsonify({"error": "Missing name or email"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO mysqli_users (name, email) VALUES (%s, %s);", (name, email))
+        conn.commit()
+        user_id = cursor.lastrowid
+        return jsonify({"id": user_id, "name": name, "email": email})
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 400
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.route('/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM mysqli_users WHERE id = %s;", (user_id,))
+        conn.commit()
+        if cursor.rowcount == 0:
+            return jsonify({"error": "User not found"}), 404
+        return jsonify({"deleted_id": user_id})
+    except mysql.connector.Error as err:
+        return jsonify({"error": str(err)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 def main():
     """Main function to run the app"""
     # Initialize DB (create tables)
