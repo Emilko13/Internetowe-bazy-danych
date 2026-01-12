@@ -2,7 +2,7 @@ import mysql.connector
 from mysql.connector import errorcode
 from flask import Flask, request, jsonify, render_template_string
 import threading
-#from database import get_connection, init_db
+
 
 DB_CONFIG = {
     "host": "127.0.0.1",
@@ -10,7 +10,7 @@ DB_CONFIG = {
     "user": "root",
     "password": "admin",
     "database": "python_db"
-    }
+}
 
 def get_db_connection():
     return mysql.connector.connect(**DB_CONFIG)
@@ -94,8 +94,8 @@ def ensure_users_table():
 
 def add_email_index():
     idx_stmt = "CREATE INDEX IF NOT EXISTS idx_email ON mysqli_users(email);"
-    # Note: MySQL doesn't support IF NOT EXISTS for CREATE INDEX in older versions.
-    # Fallback: try to create and ignore error if exists.
+    # MySQL doesn't support IF NOT EXISTS for CREATE INDEX in older versions.
+    # Trying to create and ignore error if exists.
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -232,9 +232,7 @@ def delete_user(user_id):
 def run_app():
     # Ensure base tables exist before starting the server
     ensure_users_table()
-    # Optional: create logging and triggers if not present
     setup_logging_and_triggers()
-    # Optional: add index for performance
     add_email_index()
     app.run(host='0.0.0.0', port=5000, debug=True)
 
