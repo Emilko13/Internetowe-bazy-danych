@@ -1,4 +1,7 @@
 import mysql.connector
+from mysql.connector import errorcode
+from flask import Flask, request, jsonify, render_template_string
+import threading
 from .database import get_connection, init_db
 
 def create_user(db, name: str, email: str):
