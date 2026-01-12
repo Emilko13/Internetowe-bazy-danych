@@ -1,0 +1,56 @@
+services:
+  app:
+    build: .
+    container_name: app-cont
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./app:/app
+    networks:
+      - dashnet
+
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: oe-cont
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=QWERTYadmin123!@#
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - oedata:/usr/share/opensearch/data
+    ports:
+      - 9200:9200
+      - 9600:9600
+    networks:
+      - dashnet
+
+
+  opensearch-dashboard:
+    image: opensearchproject/opensearch-dashboards:latest
+    container_name: oedash-cont
+    ports:
+      - 39080:5601
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch:9200"]'
+    depends_on:
+      - opensearch
+    networks:
+      - dashnet
+
+
+volumes:
+  oedata:
+
+
+networks:
+  dashnet:
+    driver: bridge
