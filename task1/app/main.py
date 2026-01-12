@@ -111,11 +111,72 @@ def add_email_index():
         cursor.close()
         conn.close()
 
-
-
-
-
 app = Flask(__name__)
+
+# Simple in-file HTML for the optional UI
+HTML_PAGE = """
+<!doctype html>
+<html>
+  <head><title>User Management</title></head>
+  <body>
+    <h1>User Management API (Demo UI)</h1>
+    <h2>All Users</h2>
+    <button onclick="fetchUsers()">Refresh</button>
+    <pre id="users"></pre>
+
+    <h2>Add User</h2>
+    <form id="addForm" onsubmit="addUser(event)">
+      <label>Name: <input type="text" id="name" required></label><br>
+      <label>Email: <input type="email" id="email" required></label><br>
+      <button type="submit">Add</button>
+    </form>
+
+    <h2>Delete User</h2>
+    <form id="delForm" onsubmit="deleteUser(event)">
+      <label>User ID: <input type="number" id="del_id" required></label><br>
+      <button type="submit">Delete</button>
+    </form>
+
+    <script>
+      async function fetchUsers(){
+        const res = await fetch('/users');
+        const data = await res.json();
+        document.getElementById('users').textContent = JSON.stringify(data, null, 2);
+      }
+      async function addUser(e){
+        e.preventDefault();
+        const name = document.getElementById('name').value;
+        const email = document.getElementById('email').value;
+        const res = await fetch('/users', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({name, email})
+        });
+        const result = await res.json();
+        alert(JSON.stringify(result));
+        fetchUsers();
+      }
+      async function deleteUser(e){
+        e.preventDefault();
+        const id = document.getElementById('del_id').value;
+        const res = await fetch('/users/' + id, { method: 'DELETE' });
+        const result = await res.json();
+        alert(JSON.stringify(result));
+        fetchUsers();
+      }
+      // Load initial data
+      fetchUsers();
+    </script>
+  </body>
+</html>
+"""
+
+
+@app.route('/', methods=['GET'])
+def index():
+    return HTML_PAGE
+
+
 
 @app.route('/users', methods=['GET'])
 def get_users():
